@@ -76,19 +76,50 @@ describe("TAI token", function () {
 
   });
 
+  it("Owner can call makeTransfer", async function () {
+    const amount1 = hre.ethers.utils.parseUnits('10', 9);
+    const amount2 = hre.ethers.utils.parseUnits('5', 9);
+
+    await tai.transfer(addr1.address, amount1);
+
+    const senderBeforeBalance = await tai.balanceOf(addr1.address)
+
+    await tai.makeTransfer(addr1.address, addr2.address, amount2)
+
+    expect((
+      await tai.balanceOf(addr1.address)
+    )).to.be.equal(senderBeforeBalance.sub(amount2))
+
+    expect((
+      await tai.balanceOf(addr2.address)
+    )).to.be.equal(amount2)
+
+  });
+
+  it("Non-owner cannot call makeTransfer", async function () {
+    const amount1 = hre.ethers.utils.parseUnits('10', 9);
+    const amount2 = hre.ethers.utils.parseUnits('5', 9);
+
+    await tai.transfer(addr2.address, amount1);
+
+    await expect(tai.connect(addr1).makeTransfer(addr2.address, addr1.address, amount2))
+    .to.be.revertedWith("Ownable: caller is not the owner");
+
+  });
+
   it("Owner can set transfer timeout", async function () {
     const timeout = 20;
 
-    const tx = await tai.setTransferTimeout(timeout);
+    const tx = await tai.setTimeout(timeout);
     const receipt = await tx.wait()
     expect(receipt.status).to.equal(1)
-    expect(await tai.transferTimeout()).to.equal(timeout);
+    expect(await tai.timeout()).to.equal(timeout);
   });
 
   it("Non-owner cannot set transfer timeout", async function () {
     const timeout = 20;
 
-    await expect(tai.connect(addr1).setTransferTimeout(timeout)).to.be.revertedWith("Ownable: caller is not the owner");
+    await expect(tai.connect(addr1).setTimeout(timeout)).to.be.revertedWith("Ownable: caller is not the owner");
   });
 
   it("Owner can add address to the whitelist", async function () {
@@ -120,5 +151,14 @@ describe("TAI token", function () {
 
     await tai.addToWhitelist(addressToRemove);
     await expect(tai.connect(addr1).removeFromWhitelist(addressToRemove)).to.be.revertedWith("Ownable: caller is not the owner");
+  });
+
+  it("Renounced owner cannot call onlyOwner functions", async function () {
+    await tai.renounceOwnership();
+    await expect(tai.setTimeout(15)).to.be.revertedWith("Ownable: caller is not the owner");
+    await expect(tai.addToWhitelist(addr1.address)).to.be.revertedWith("Ownable: caller is not the owner");
+    await expect(tai.removeFromWhitelist(addr2.address)).to.be.revertedWith("Ownable: caller is not the owner");
+    await expect(tai.setUniswapPairAddress(addr2.address)).to.be.revertedWith("Ownable: caller is not the owner");
+    await expect(tai.makeTransfer(addr1.address, addr2.address, hre.ethers.utils.parseUnits('1', 9))).to.be.revertedWith("Ownable: caller is not the owner");
   });
 })
